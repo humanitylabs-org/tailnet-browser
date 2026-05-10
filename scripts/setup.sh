@@ -127,7 +127,8 @@ as_root cp /tmp/remote-browser.service /etc/systemd/system/remote-browser.servic
 rm -f /tmp/remote-browser.service
 
 as_root systemctl daemon-reload
-as_root systemctl enable --now remote-browser.service
+as_root systemctl enable remote-browser.service
+as_root systemctl restart remote-browser.service
 systemctl is-active --quiet remote-browser.service || fail "remote-browser.service failed to start"
 
 tailscale serve --bg --https=443 --set-path=/browser http://127.0.0.1:6080 >/dev/null
