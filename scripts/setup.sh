@@ -18,6 +18,8 @@ as_root() {
 
 "$APP_DIR/scripts/prereq-check.sh"
 
+NOVNC_WEB_ROOT="/usr/local/share/remote-browser/novnc"
+
 cat <<'EOF' >/tmp/remote-browser.sh
 #!/bin/bash
 set -euo pipefail
@@ -41,12 +43,34 @@ if [[ ! -x "$NOVNC_LAUNCH" ]]; then
 fi
 
 NOVNC_WEB_ROOT="/usr/local/share/remote-browser/novnc"
+ASSET_DIR="/usr/local/share/remote-browser/assets"
 mkdir -p "$NOVNC_WEB_ROOT"
 for item in /usr/share/novnc/*; do
   name="$(basename "$item")"
   [[ "$name" == "index.html" ]] && continue
   ln -sfn "$item" "$NOVNC_WEB_ROOT/$name"
 done
+
+install -m 0644 "$ASSET_DIR/icon-192.png" "$NOVNC_WEB_ROOT/icon-192.png"
+install -m 0644 "$ASSET_DIR/icon-512.png" "$NOVNC_WEB_ROOT/icon-512.png"
+install -m 0644 "$ASSET_DIR/apple-touch-icon.png" "$NOVNC_WEB_ROOT/apple-touch-icon.png"
+
+cat >"$NOVNC_WEB_ROOT/manifest.webmanifest" <<'JSON'
+{
+  "name": "Tailnet Browser",
+  "short_name": "Browser",
+  "id": "/browser/",
+  "start_url": "/browser/",
+  "scope": "/browser/",
+  "display": "standalone",
+  "background_color": "#0B0B0D",
+  "theme_color": "#0B0B0D",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
+JSON
 
 cat >"$NOVNC_WEB_ROOT/index.html" <<'HTML'
 <!doctype html>
@@ -55,6 +79,9 @@ cat >"$NOVNC_WEB_ROOT/index.html" <<'HTML'
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#0B0B0D" />
+  <link rel="manifest" href="/browser/manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/browser/icon-192.png" />
+  <link rel="apple-touch-icon" href="/browser/apple-touch-icon.png" />
   <title>Tailnet Browser</title>
 </head>
 <body style="margin:0;background:#0B0B0D;color:#F2F2F2;font:16px system-ui,-apple-system,sans-serif;display:grid;place-items:center;min-height:100vh;">
@@ -126,12 +153,21 @@ EOF
 as_root cp /tmp/remote-browser.service /etc/systemd/system/remote-browser.service
 rm -f /tmp/remote-browser.service
 
+as_root mkdir -p /usr/local/share/remote-browser/assets
+as_root install -m 0644 "$APP_DIR/icon-192.png" /usr/local/share/remote-browser/assets/icon-192.png
+as_root install -m 0644 "$APP_DIR/icon-512.png" /usr/local/share/remote-browser/assets/icon-512.png
+as_root install -m 0644 "$APP_DIR/apple-touch-icon.png" /usr/local/share/remote-browser/assets/apple-touch-icon.png
+
 as_root systemctl daemon-reload
 as_root systemctl enable remote-browser.service
 as_root systemctl restart remote-browser.service
 systemctl is-active --quiet remote-browser.service || fail "remote-browser.service failed to start"
 
 tailscale serve --bg --https=443 --set-path=/browser http://127.0.0.1:6080 >/dev/null
+tailscale serve --bg --https=443 --set-path=/browser/manifest.webmanifest "$NOVNC_WEB_ROOT/manifest.webmanifest" >/dev/null
+tailscale serve --bg --https=443 --set-path=/browser/apple-touch-icon.png "$NOVNC_WEB_ROOT/apple-touch-icon.png" >/dev/null
+tailscale serve --bg --https=443 --set-path=/browser/icon-192.png "$NOVNC_WEB_ROOT/icon-192.png" >/dev/null
+tailscale serve --bg --https=443 --set-path=/browser/icon-512.png "$NOVNC_WEB_ROOT/icon-512.png" >/dev/null
 
 DNS_NAME="$(tailscale status --self --json 2>/dev/null | python3 -c 'import json,sys; print((json.load(sys.stdin).get("Self") or {}).get("DNSName", "").rstrip("."))' 2>/dev/null || true)"
 if [[ -n "$DNS_NAME" ]]; then
