@@ -99,6 +99,30 @@ cat >"$NOVNC_WEB_ROOT/index.html" <<'HTML'
 </html>
 HTML
 
+python3 - <<'PY'
+from pathlib import Path
+
+root = Path('/usr/local/share/remote-browser/novnc')
+inject = '''
+  <meta name="theme-color" content="#0B0B0D" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Browser" />
+  <link rel="manifest" href="/browser/manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/browser/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/browser/apple-touch-icon.png" />
+'''
+
+for name in ('vnc_auto.html', 'vnc.html'):
+    p = root / name
+    if not p.exists():
+        continue
+    s = p.read_text(encoding='utf-8', errors='ignore')
+    s = s.replace('<title>noVNC</title>', '<title>Tailnet Browser</title>')
+    if '/browser/manifest.webmanifest' not in s and '</head>' in s:
+        s = s.replace('</head>', f'{inject}\n</head>', 1)
+    p.write_text(s, encoding='utf-8')
+PY
+
 PROFILE_DIR="/tmp/tailnet-browser-profile"
 mkdir -p "$PROFILE_DIR"
 
